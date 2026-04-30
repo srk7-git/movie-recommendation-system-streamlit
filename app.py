@@ -1,19 +1,48 @@
 import streamlit as st
 import pickle
 import requests
+import os
+import pandas as pd
 from difflib import get_close_matches
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import CountVectorizer
 
-# Load data
+# -------------------------------
+# STEP 1: Create files if missing
+# -------------------------------
+def create_files():
+    movies = pd.read_csv("tmdb_5000_movies.csv")
+    movies = movies[['id', 'title', 'overview']]
+    movies.dropna(inplace=True)
+
+    cv = CountVectorizer(max_features=5000, stop_words='english')
+    vectors = cv.fit_transform(movies['overview']).toarray()
+    similarity = cosine_similarity(vectors)
+
+    pickle.dump(movies, open('movies.pkl', 'wb'))
+    pickle.dump(similarity, open('similarity.pkl', 'wb'))
+
+# Check if files exist
+if not os.path.exists('movies.pkl') or not os.path.exists('similarity.pkl'):
+    create_files()
+
+# -------------------------------
+# STEP 2: Load data
+# -------------------------------
 df = pickle.load(open("movies.pkl", "rb"))
 similarity = pickle.load(open("similarity.pkl", "rb"))
 
-# 🔥 IMPORTANT FIX
+# Lowercase column for matching
 df['title_lower'] = df['title'].str.lower()
 
-# 🔥 YOUR API KEY
-API_KEY = "81e9da89dc6e5c7d239e00d5b4816cdc"
+# -------------------------------
+# STEP 3: API KEY
+# -------------------------------
+API_KEY = "81e9da89dc6e5c7d239e00d5b4816cdc"  
 
-# Fetch poster
+# -------------------------------
+# STEP 4: Fetch poster
+# -------------------------------
 def fetch_poster(movie_title):
     try:
         url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_title}"
@@ -24,16 +53,15 @@ def fetch_poster(movie_title):
     except:
         return "https://via.placeholder.com/300x450?text=No+Image"
 
-# Recommendation
+# -------------------------------
+# STEP 5: Recommendation logic
+# -------------------------------
 def recommend(movie):
     movie = movie.lower().strip()
 
-    # ✅ Direct match
     if movie in df['title_lower'].values:
         idx = df[df['title_lower'] == movie].index[0]
-
     else:
-        # 🔍 Fuzzy match
         matches = get_close_matches(movie, df['title_lower'].values, n=1, cutoff=0.6)
 
         if matches:
@@ -56,18 +84,18 @@ def recommend(movie):
 
     return movies, posters
 
-# UI
+# -------------------------------
+# STEP 6: UI
+# -------------------------------
 st.set_page_config(page_title="Movie Recommender", layout="wide")
 
 st.title("🎬 Movie Recommendation System")
 st.markdown("Get similar movies instantly based on content similarity")
 st.write("")
 
-# Input
 movie_name = st.text_input("Enter a movie name:")
 selected_movie = st.selectbox("Or select a movie:", df['title'].values)
 
-# Button
 if st.button("Recommend"):
 
     if movie_name.strip() != "":
@@ -88,3 +116,4 @@ if st.button("Recommend"):
             with cols[i]:
                 st.image(posters[i])
                 st.caption(f"{movies[i][0]} ⭐ {movies[i][1]}")
+
